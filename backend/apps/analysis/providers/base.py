@@ -31,7 +31,7 @@ class FailingProvider(BaseProvider):
 
 def iter_providers(order: list[str] | None, config: dict | None = None):
     """Yields (provider_name, provider) instances honoring AI_FAILOVER order."""
-    from .providers import gemini, manual, ollama, openai_compat
+    from . import gemini, manual, ollama, openai_compat
 
     config = config or {}
     order = order or []

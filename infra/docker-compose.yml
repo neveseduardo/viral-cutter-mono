@@ -21,12 +21,7 @@ x-backend-env: &backend-env
   FFMPEG_BIN: ${FFMPEG_BIN:-ffmpeg}
   FFPROBE_BIN: ${FFPROBE_BIN:-ffprobe}
   FFMPEG_ENCODER: ${FFMPEG_ENCODER:-}
-  WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
-  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-  AI_FAILOVER: ${AI_FAILOVER:-auto}
-  G4F_ENABLED: ${G4F_ENABLED:-true}
+  WHISPER_MODEL: ${WHISPER_MODEL:-tiny}
   LOCAL_LLM_MODELS_DIR: ${LOCAL_LLM_MODELS_DIR:-/data/models}
   TRANSLATION_ENGINE: ${TRANSLATION_ENGINE:-external}
   DEEPL_KEY: ${DEEPL_KEY:-}
@@ -74,9 +69,10 @@ services:
     command: >
       sh -c "python manage.py migrate --noinput &&
       python manage.py runserver 0.0.0.0:8000"
+    env_file: ../backend/.env
     environment: *backend-env
     volumes:
-      - storage:/data
+      - ../data/media:/data
       - ../backend:/app
       - ../schemas:/app/schemas:ro
     depends_on:
@@ -92,9 +88,10 @@ services:
       dockerfile: infra/backend/Dockerfile
     restart: unless-stopped
     command: celery -A config worker --loglevel=info --concurrency=2 -Q io,cpu
+    env_file: ../backend/.env
     environment: *backend-env
     volumes:
-      - storage:/data
+      - ../data/media:/data
       - ../backend:/app
       - ../schemas:/app/schemas:ro
     depends_on:
@@ -110,9 +107,10 @@ services:
     profiles: ["gpu"]
     restart: unless-stopped
     command: celery -A config worker --loglevel=info --concurrency=1 -Q gpu --prefetch-multiplier=1
+    env_file: ../backend/.env
     environment: *backend-env
     volumes:
-      - storage:/data
+      - ../data/media:/data
       - ../backend:/app
       - ../schemas:/app/schemas:ro
     deploy:

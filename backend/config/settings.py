@@ -193,7 +193,7 @@ def _vc_task_router(name, args, kwargs, options, task=None, **kw):
     if name.startswith("apps.rendering."):
         wants_gpu = USE_GPU and FFMPEG_ENCODER in ("h264_nvenc", "hevc_nvenc")
         return {"queue": "gpu" if wants_gpu else "cpu"}
-    if name.startswith("apps.analysis.") or name.startswith("apps.editing.") or name.startswith("apps.export."):
+    if name.startswith("apps.analysis.") or name.startswith("apps.editing.") or name.startswith("apps.export.") or name.startswith("apps.subtitles."):
         return {"queue": "cpu"}
     return None
 
