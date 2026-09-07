@@ -1,0 +1,656 @@
+{
+  "info": {
+    "name": "ViralCutter API",
+    "description": "Collection de teste da API do ViralCutter (AGENTS.md §11).\n\nBase: http://localhost:8080 (nginx) ou http://localhost:8001 (backend direto).\n\nVariaveis uteis (colecao -> Variables / exemplo de execucao):\n- baseUrl    : http://localhost:8080\n- project_id : id de um projeto criado (POST /projects)\n- asset_id   : id de um asset listado em GET /projects/{project_id}/assets\n- run_id     : id do pipeline-run (resposta de POST /pipeline-runs)\n- job_id     : id de um job (GET /pipeline-runs/{run_id}/jobs)\n- idx        : indice do segmento (0-based, ver GET /projects/{project_id}/segments)\n- profile_id : id de um profile (GET /profiles)\n\nAUTH_DISABLED=true (default) dispensa login. Com auth habilitado, use as rotas\nem 'Auth' para obter o token e preencha a variavel 'token' (Authorization -> Bearer).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (guest)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('token', pm.response.json().token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guest\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Apenas necessario se AUTH_DISABLED=false. Resposta inclui 'token'."
+          }
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{token}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health & Config",
+      "item": [
+        {
+          "name": "Health (db + redis)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "200 = ok; 503 = degradado (db ou redis fora)."
+          }
+        },
+        {
+          "name": "Config publica do frontend",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/config/frontend",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "config", "frontend"]
+            },
+            "description": "Limites, modelos whisper, providers, profiles, presets de legenda, workflows."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Listar projetos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects"]
+            },
+            "description": "Lista paginada (results[])."
+          }
+        },
+        {
+          "name": "Criar projeto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('project_id', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Meu projeto de teste\",\n  \"source_url\": \"https://www.youtube.com/watch?v=...\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Grava project_id na variavel da colecao. 'name' ou 'source_url' opcionais."
+          }
+        },
+        {
+          "name": "Detalhe do projeto (agregado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}"]
+            },
+            "description": "Inclui assets, segments e pipeline_runs."
+          }
+        },
+        {
+          "name": "Excluir projeto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}"]
+            },
+            "description": "Remove do storage os arquivos fisicos dos assets."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingestao",
+      "item": [
+        {
+          "name": "Ingest — upload de arquivo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/ingest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "ingest"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "source", "value": "upload", "type": "text" },
+                { "key": "file", "type": "file", "src": [] }
+              ]
+            },
+            "description": "Multipart: source=upload + arquivo em 'file'. Enfileira normalizacao (worker)."
+          }
+        },
+        {
+          "name": "Ingest — YouTube",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/ingest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "ingest"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"youtube\",\n  \"url\": \"https://www.youtube.com/watch?v=...\",\n  \"video_quality\": \"1080p\",\n  \"use_youtube_subs\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Enfileira yt-dlp na fila io. use_youtube_subs=true reaproveita legendas oficiais."
+          }
+        },
+        {
+          "name": "Listar assets do projeto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "assets"]
+            },
+            "description": "source → downloaded → normalized → cut → edited → final."
+          }
+        },
+        {
+          "name": "Asset — download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/assets/{{asset_id}}/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "assets", "{{asset_id}}", "download"]
+            },
+            "description": "Download autorizado (Content-Disposition: attachment). Sem auth."
+          }
+        },
+        {
+          "name": "Asset — conteudo (inline)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/assets/{{asset_id}}/content",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "assets", "{{asset_id}}", "content"]
+            },
+            "description": "Serve o arquivo inline (preview/player). Sem auth."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transcricao & Segmentos",
+      "item": [
+        {
+          "name": "Transcricao canonica (transcript.json)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/transcript",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "transcript"]
+            },
+            "description": "Schema 8.1: segments[] com words[] por palavra."
+          }
+        },
+        {
+          "name": "Segmentos virais",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/segments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "segments"]
+            },
+            "description": "Schema 8.2: title, hook, score, scores{}, start_time, end_time."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Legendas (por segmento)",
+      "item": [
+        {
+          "name": "Ler legendas canonicas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/segments/{{idx}}/subtitles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "segments", "{{idx}}", "subtitles"]
+            },
+            "description": "Schema 8.3 (canonical): segmentos com words[], tempos relativos ao corte."
+          }
+        },
+        {
+          "name": "Salvar legendas (edicao)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/segments/{{idx}}/subtitles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "segments", "{{idx}}", "subtitles"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"1.0\",\n  \"language\": \"pt\",\n  \"derived\": [],\n  \"segments\": [\n    {\n      \"start\": 0.0,\n      \"end\": 1.2,\n      \"text\": \"Texto editado\",\n      \"words\": [\n        { \"word\": \"Texto\", \"start\": 0.0, \"end\": 0.5, \"score\": 0.9 },\n        { \"word\": \"editado\", \"start\": 0.5, \"end\": 1.2, \"score\": 0.9 }\n      ]\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Persiste o canonical §8.3; re-render reflete as edicoes."
+          }
+        },
+        {
+          "name": "Re-render de 1 segmento",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/segments/{{idx}}/render",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "segments", "{{idx}}", "render"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Enfileira burn-in de apenas um segmento (202 Accepted)."
+          }
+        },
+        {
+          "name": "Exportar segmento (Premiere)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/segments/{{idx}}/export",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "segments", "{{idx}}", "export"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"premiere\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Enfileira exportacao XML FCP7 para Premiere."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pipeline Runs & Jobs",
+      "item": [
+        {
+          "name": "Criar pipeline run",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('run_id', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/pipeline-runs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "pipeline-runs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow\": \"full\",\n  \"profile_id\": null,\n  \"overrides\": {\n    \"segments\": 3,\n    \"min_duration\": 20,\n    \"max_duration\": 60,\n    \"ai_provider\": \"manual\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "workflow: full|c ut_only|subtitles_only. profile_id pode referenciar /profiles.\nGrava run_id na colecao."
+          }
+        },
+        {
+          "name": "Detalhe do pipeline run (estado agregado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pipeline-runs/{{run_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pipeline-runs", "{{run_id}}"]
+            },
+            "description": "status, progress 0-100, configuration_snapshot, jobs[]."
+          }
+        },
+        {
+          "name": "Historico de runs do projeto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/projects/{{project_id}}/pipeline-runs/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "pipeline-runs", "history"]
+            }
+          }
+        },
+        {
+          "name": "Listar jobs de um run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pipeline-runs/{{run_id}}/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pipeline-runs", "{{run_id}}", "jobs"]
+            },
+            "description": "stage, queue, status, attempt, progress, error, logs."
+          }
+        },
+        {
+          "name": "Cancelar pipeline run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pipeline-runs/{{run_id}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pipeline-runs", "{{run_id}}", "cancel"]
+            },
+            "description": "Cancela jobs pending/running e processos-filho (ffmpeg)."
+          }
+        },
+        {
+          "name": "Cancelar job especifico",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "jobs", "{{job_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Retry de job falho",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/retry",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "jobs", "{{job_id}}", "retry"]
+            },
+            "description": "So para status=failed. Reincrementa attempt e reenfileira."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "item": [
+        {
+          "name": "Listar processing profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "profiles"]
+            },
+            "description": "Garante a criacao dos builtins na primeira chamada."
+          }
+        },
+        {
+          "name": "Criar profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('profile_id', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "profiles"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Meu preset\",\n  \"config\": {\n    \"segments\": 3,\n    \"min_duration\": 20,\n    \"max_duration\": 60,\n    \"whisper_model\": \"large-v3-turbo\",\n    \"face_mode\": \"auto\",\n    \"no_face_mode\": \"padding\",\n    \"subtitle_preset\": \"Hormozi (Classic)\",\n    \"translation_language\": null,\n    \"video_quality\": \"1080p\",\n    \"use_youtube_subs\": false,\n    \"chunk_size\": 15000,\n    \"ai_provider\": \"auto\",\n    \"min_score\": 50\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Grava profile_id na colecao."
+          }
+        },
+        {
+          "name": "Detalhe do profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles/{{profile_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "profiles", "{{profile_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles/{{profile_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "profiles", "{{profile_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Meu preset (editado)\",\n  \"config\": {\n    \"segments\": 2,\n    \"min_duration\": 15,\n    \"max_duration\": 45,\n    \"whisper_model\": \"base\",\n    \"face_mode\": \"none\",\n    \"no_face_mode\": \"zoom\",\n    \"subtitle_preset\": \"Hormozi (Classic)\",\n    \"translation_language\": \"en\",\n    \"video_quality\": \"720p\",\n    \"use_youtube_subs\": true,\n    \"chunk_size\": 10000,\n    \"ai_provider\": \"auto\",\n    \"min_score\": 40\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Excluir profile",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/profiles/{{profile_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "profiles", "{{profile_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Exports",
+      "item": [
+        {
+          "name": "Baixar artefato exportado (XML Premiere)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/exports/{{asset_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "exports", "{{asset_id}}"]
+            },
+            "description": "asset_id = asset kind 'export' do projeto."
+          }
+        }
+      ]
+    },
+    {
+      "name": "SSE (progresso em tempo real)",
+      "item": [
+        {
+          "name": "Stream de progresso do run",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" },
+              { "key": "Cache-Control", "value": "no-cache" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stream/pipeline-runs/{{run_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["stream", "pipeline-runs", "{{run_id}}"]
+            },
+            "description": "SSE no CONTRATO §8.6 — rota NO /api/v1 (top-level /stream).\nEventos: pipeline.snapshot, job.started, job.progress, job.finished, pipeline.finished.\nNo Postman, abra em 'Send and Download' (SSE e streaming)."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "project_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "asset_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idx",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "profile_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

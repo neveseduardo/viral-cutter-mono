@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://viralcutter.dev/schemas/subtitles.schema.json",
+  "title": "Canonical Subtitle Track",
+  "description": "Trilha de legendas canônica (fonte da verdade antes de ASS/SRT/VTT) (§8.3).",
+  "type": "object",
+  "required": ["schema_version", "language", "segments"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "language": { "type": "string", "minLength": 2, "maxLength": 10 },
+    "derived": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "translated": { "type": "boolean" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "text": { "type": "string" },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["word", "start", "end"],
+              "properties": {
+                "word": { "type": "string", "minLength": 1 },
+                "start": { "type": "number", "minimum": 0 },
+                "end": { "type": "number", "minimum": 0 },
+                "score": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

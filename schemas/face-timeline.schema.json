@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://viralcutter.dev/schemas/face-timeline.schema.json",
+  "title": "Face Timeline",
+  "description": "Timeline facial amostrada para enquadramento dinâmico e posicionamento de legendas (§8.4).",
+  "type": "object",
+  "required": ["schema_version", "width", "height", "fps", "frames"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "fps": { "type": "number", "minimum": 0 },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t"],
+        "properties": {
+          "t": { "type": "number", "minimum": 0 },
+          "mode": { "enum": ["none", "one", "two", "active"] },
+          "bbox": {
+            "type": ["array", "null"],
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "center": {
+            "type": ["array", "null"],
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "faces": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

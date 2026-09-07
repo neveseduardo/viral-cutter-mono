@@ -1,0 +1,151 @@
+x-backend-env: &backend-env
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me-in-prod}
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
+  AUTH_DISABLED: ${AUTH_DISABLED:-true}
+  DB_ENGINE: ${DB_ENGINE:-postgres}
+  POSTGRES_DB: ${POSTGRES_DB:-viralcutter}
+  POSTGRES_USER: ${POSTGRES_USER:-viralcutter}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-viralcutter}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+  CELERY_TASK_MAX_RETRIES: ${CELERY_TASK_MAX_RETRIES:-3}
+  CELERY_RETRY_BACKOFF: ${CELERY_RETRY_BACKOFF:-5}
+  STORAGE_ROOT: /data
+  STORAGE_QUOTA_MB: ${STORAGE_QUOTA_MB:-10240}
+  USE_GPU: ${USE_GPU:-false}
+  CUDA_DEVICE: ${CUDA_DEVICE:-0}
+  FFMPEG_BIN: ${FFMPEG_BIN:-ffmpeg}
+  FFPROBE_BIN: ${FFPROBE_BIN:-ffprobe}
+  FFMPEG_ENCODER: ${FFMPEG_ENCODER:-}
+  WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+  AI_FAILOVER: ${AI_FAILOVER:-auto}
+  G4F_ENABLED: ${G4F_ENABLED:-true}
+  LOCAL_LLM_MODELS_DIR: ${LOCAL_LLM_MODELS_DIR:-/data/models}
+  TRANSLATION_ENGINE: ${TRANSLATION_ENGINE:-external}
+  DEEPL_KEY: ${DEEPL_KEY:-}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-4096}
+  MAX_VIDEO_DURATION_S: ${MAX_VIDEO_DURATION_S:-7200}
+  MAX_SEGMENTS: ${MAX_SEGMENTS:-10}
+  CONCURRENT_JOBS_LIMIT: ${CONCURRENT_JOBS_LIMIT:-2}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+  # Schemas canônicos montados em ../schemas → /app/schemas (AGENTS.md §10)
+  VC_SCHEMA_DIR: /app/schemas
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-viralcutter}
+      POSTGRES_USER: ${POSTGRES_USER:-viralcutter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-viralcutter}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viralcutter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py runserver 0.0.0.0:8000"
+    environment: *backend-env
+    volumes:
+      - storage:/data
+      - ../backend:/app
+      - ../schemas:/app/schemas:ro
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      # entrypoint público é o nginx:8080; 8001 é acesso direto/API (evita colisão com apps locais)
+      - "8001:8000"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile
+    restart: unless-stopped
+    command: celery -A config worker --loglevel=info --concurrency=2 -Q io,cpu
+    environment: *backend-env
+    volumes:
+      - storage:/data
+      - ../backend:/app
+      - ../schemas:/app/schemas:ro
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  # 🚨 GPU worker: one at a time on the gpu queue (AGENTS.md §5.3).
+  # Uncomment with a GPU machine: docker compose --profile gpu up
+  worker-gpu:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile
+    profiles: ["gpu"]
+    restart: unless-stopped
+    command: celery -A config worker --loglevel=info --concurrency=1 -Q gpu --prefetch-multiplier=1
+    environment: *backend-env
+    volumes:
+      - storage:/data
+      - ../backend:/app
+      - ../schemas:/app/schemas:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  dbdata:
+  redisdata:
+  storage:

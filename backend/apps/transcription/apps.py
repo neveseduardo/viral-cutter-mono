@@ -1,0 +1,10 @@
+from django.apps import AppConfig
+
+
+class TranscriptionConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.transcription"
+    label = "transcription"
+
+
+__all__ = ["TranscriptionConfig"]

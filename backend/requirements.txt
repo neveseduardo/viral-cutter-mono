@@ -1,0 +1,55 @@
+# ViralCutter — backend Python requirements
+
+# --- Web framework ---
+Django>=5.0,<5.2
+djangorestframework>=3.15
+django-filter>=24.3
+djangorestframework-simplejwt>=5.3
+django-cors-headers>=4.4
+python-dotenv>=1.0
+
+# --- Async / jobs ---
+celery>=5.4
+redis>=5.0
+# Django 5.1 usa psycopg v3 nativamente no backend postgresql (sem build-fail em slim).
+psycopg[binary]>=3.2
+
+# --- Media Engine ---
+ffmpeg-python>=0.2.0
+opencv-python-headless>=4.9
+numpy>=1.26
+Pillow>=10.0
+psutil>=5.9
+
+# --- Schemas / validation ---
+jsonschema>=4.21
+
+# --- HTTP / AI providers ---
+httpx>=0.27
+requests>=2.31
+openai>=1.30
+google-genai>=1.0
+
+# --- Ingestion ---
+yt-dlp>=2024.8.6
+shortuuid>=1.0.11
+
+# --- ML (opcional; o pipeline degrada graciosamente quando ausente) ---
+# Motor de transcrição em CPU (whisper + timestamps por palavra, §7.2). Pesado
+# (~torch), mas necessário para o pipeline full rodar ponta-a-ponta sem GPU.
+openai-whisper>=20240930
+# whisperx>=3.1.1       # heavy; install separately for GPU transcription
+# mediapipe>=0.10.11    # face detection
+# insightface>=0.7.3    # face detection (more accurate, onnx)
+# llama-cpp-python      # local LLM (GGUF)
+# torch / torchaudio    # required by whisperx (openai-whisper já puxa torch)
+
+# --- Translation ---
+deep-translator>=1.11
+
+# --- Tooling ---
+ruff
+mypy
+pytest
+pytest-django
+pytest-cov

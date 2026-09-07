@@ -1,0 +1,1 @@
+"""ViralCutter backend applications package."""

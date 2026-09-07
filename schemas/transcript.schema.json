@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://viralcutter.dev/schemas/transcript.schema.json",
+  "title": "Transcription",
+  "description": "Transcrição canônica com timestamps por palavra (§8.1).",
+  "type": "object",
+  "required": ["schema_version", "language", "segments"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "language": { "type": "string", "minLength": 2, "maxLength": 10 },
+    "model": { "type": "string" },
+    "source": { "enum": ["whisper", "whisperx", "youtube_subs", "manual"] },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "start", "end", "text"],
+        "properties": {
+          "id": { "type": "integer" },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number" },
+          "text": { "type": "string" },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["word", "start", "end"],
+              "properties": {
+                "word": { "type": "string" },
+                "start": { "type": "number", "minimum": 0 },
+                "end": { "type": "number" },
+                "score": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

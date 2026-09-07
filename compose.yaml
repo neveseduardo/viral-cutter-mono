@@ -1,0 +1,4 @@
+# Convenience wrapper (raiz) → docker compose up
+# O compose canônico vive em infra/docker-compose.yml (AGENTS.md §3).
+include:
+  - infra/docker-compose.yml
