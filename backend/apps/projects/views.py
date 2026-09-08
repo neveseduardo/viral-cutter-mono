@@ -102,9 +102,13 @@ def _serve_asset(request, asset_id, *, content_disposition: str):
     name = asset.original_name or path.name
     import urllib.parse
 
-    quoted = urllib.parse.quote(name)
+    # RFC 5987-compliant: ASCII fallback + UTF-8 encoded parameter
+    ascii_name = name.encode("ascii", errors="replace").decode("ascii")
+    quoted = urllib.parse.quote(name, safe="")
     response = FileResponse(open(path, "rb"), content_type=ctype)
-    response["Content-Disposition"] = f'{content_disposition}; filename="*; filename*=UTF-8\'\'{quoted}"'
+    response["Content-Disposition"] = (
+        f'{content_disposition}; filename="{ascii_name}"; filename*=UTF-8\'\'{quoted}'
+    )
     return response
 
 
@@ -142,6 +146,10 @@ class IngestView(APIView):
             url = request.data.get("url", "")
             if not url:
                 return Response({"error": True, "code": "validation_error", "detail": "url é obrigatória."}, status=400)
+            # Persist the URL on the project so ingest_stage (pipeline) can reuse it
+            if url and not project.source_url:
+                project.source_url = url
+                project.save(update_fields=["source_url", "updated_at"])
             from apps.ingestion.tasks import ingest_stage_direct
 
             ingest_stage_direct.delay(

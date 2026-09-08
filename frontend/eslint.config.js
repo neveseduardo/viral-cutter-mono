@@ -25,4 +25,11 @@ export default [
       "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
+  // shadcn-vue generated components — relax prop-defaults rule (must come last)
+  {
+    files: ["src/components/ui/**/*.vue"],
+    rules: {
+      "vue/require-default-prop": "off",
+    },
+  },
 ]

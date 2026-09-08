@@ -39,6 +39,8 @@ def transcribe_whisperx(audio_path: str, model_name: str, device: str, progress_
 
     audio = whisperx.load_audio(audio_path)
     model = whisperx.load_model(model_name, device, compute_type=compute_type)
+    if progress_cb:
+        progress_cb(30, "Transcrevendo áudio...")
     result = model.transcribe(audio, batch_size=16, chunk_size=10)
     language = result.get("language", "pt")
 
@@ -65,18 +67,80 @@ def transcribe_whisperx(audio_path: str, model_name: str, device: str, progress_
 
     if progress_cb:
         progress_cb(90, "Formatando resultados...")
-    return {"language": language, "segments": result["segments"]}
+
+    # Normalise segment structure to match the canonical schema (§8.1):
+    # ensure each segment has an "id" and words have the expected fields.
+    normalised = []
+    for i, seg in enumerate(result["segments"]):
+        words = []
+        for w in seg.get("words") or []:
+            words.append({
+                "word": str(w.get("word", "")).strip(),
+                "start": round(float(w.get("start", 0)), 3),
+                "end": round(float(w.get("end", 0)), 3),
+                "score": round(float(w.get("score", 0.0)), 3),
+            })
+        normalised.append({
+            "id": i,
+            "start": round(float(seg.get("start", 0)), 3),
+            "end": round(float(seg.get("end", 0)), 3),
+            "text": seg.get("text", "").strip(),
+            "words": words,
+        })
+
+    return {"language": language, "segments": normalised}
 
 
 def transcribe_whisper(audio_path: str, model_name: str, device: str, progress_cb=None) -> dict:
+    import threading
+    import time
+
     import whisper
 
     if progress_cb:
         progress_cb(15, "Carregando modelo de transcrição...")
     model = whisper.load_model(model_name, device=device)
-    result = model.transcribe(audio_path, word_timestamps=True, fp16=(device == "cuda"))
-    language = result.get("language", "pt")
 
+    # openai-whisper não expõe progresso por segmento. Rodamos um heartbeat
+    # em background para manter a UI viva durante a transcrição bloqueante.
+    _result_holder: dict = {}
+    _done = threading.Event()
+
+    def _heartbeat():
+        msgs = [
+            "Transcrevendo áudio...",
+            "Processando fala...",
+            "Identificando palavras...",
+            "Quase lá...",
+        ]
+        step = 0
+        # progresso sintético entre 36% e 90% durante a transcrição
+        prog = 36
+        while not _done.wait(timeout=8.0):
+            if progress_cb:
+                progress_cb(min(prog, 90), msgs[step % len(msgs)])
+            prog = min(prog + 6, 90)
+            step += 1
+
+    def _run_transcribe():
+        _result_holder["result"] = model.transcribe(
+            audio_path, word_timestamps=True, fp16=(device == "cuda")
+        )
+        _done.set()
+
+    t_heartbeat = threading.Thread(target=_heartbeat, daemon=True)
+    t_transcribe = threading.Thread(target=_run_transcribe, daemon=True)
+    t_heartbeat.start()
+    t_transcribe.start()
+    t_transcribe.join()
+    _done.set()  # garante que o heartbeat pare mesmo em caso de exceção
+    t_heartbeat.join(timeout=2)
+
+    result = _result_holder.get("result")
+    if result is None:
+        raise RuntimeError("Transcrição não produziu resultado.")
+
+    language = result.get("language", "pt")
     segments = []
     for seg in result.get("segments", []):
         words = []

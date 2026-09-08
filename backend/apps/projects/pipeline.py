@@ -37,9 +37,9 @@ BUILTIN_PROFILES: list[dict] = [
             "whisper_model": "large-v3-turbo",
             "face_mode": "auto",
             "no_face_mode": "padding",
-            "subtitle_preset": "Hormozi (Classic)",
-            "translation_language": None,
-            "video_quality": "1080p",
+            "subtitle_preset": "hormozi-classic",
+            "translate_to": None,
+            "video_quality": "720p",
             "use_youtube_subs": False,
             "chunk_size": 15000,
             "ai_provider": "auto",
@@ -56,8 +56,8 @@ BUILTIN_PROFILES: list[dict] = [
             "whisper_model": "base",
             "face_mode": "auto",
             "no_face_mode": "padding",
-            "subtitle_preset": "Hormozi (Classic)",
-            "translation_language": None,
+            "subtitle_preset": "hormozi-classic",
+            "translate_to": None,
             "video_quality": "720p",
             "use_youtube_subs": False,
             "chunk_size": 15000,
@@ -75,9 +75,9 @@ BUILTIN_PROFILES: list[dict] = [
             "whisper_model": "base",
             "face_mode": "none",
             "no_face_mode": "zoom",
-            "subtitle_preset": "Hormozi (Classic)",
-            "translation_language": None,
-            "video_quality": "1080p",
+            "subtitle_preset": "hormozi-classic",
+            "translate_to": None,
+            "video_quality": "720p",
             "use_youtube_subs": False,
             "chunk_size": 15000,
             "ai_provider": "auto",
@@ -156,13 +156,21 @@ def resolve_config(workflow: str, profile_id: int | None, overrides: dict | None
     base.setdefault("min_duration", 20)
     base.setdefault("max_duration", 60)
     base.setdefault("whisper_model", settings.WHISPER_MODEL)
-    base.setdefault("video_quality", "1080p")
+    base.setdefault("video_quality", "720p")
     base.setdefault("use_youtube_subs", False)
     base.setdefault("ai_provider", settings.AI_FAILOVER.split(",")[0])
     base.setdefault("face_mode", "auto")
     base.setdefault("no_face_mode", "padding")
-    base.setdefault("subtitle_preset", "Hormozi (Classic)")
+    base.setdefault("subtitle_preset", "hormozi-classic")
     base.setdefault("max_segments", settings.MAX_SEGMENTS)
+    # Normalise translation key: accept both legacy "translation_language" and
+    # the canonical "translate_to".  Always store as "translate_to" so all
+    # consumers (tasks, stage checks) use a single key.
+    if "translation_language" in base and "translate_to" not in base:
+        base["translate_to"] = base.pop("translation_language")
+    elif "translation_language" in base:
+        base.pop("translation_language")
+    base.setdefault("translate_to", None)
     return base
 
 
@@ -210,7 +218,7 @@ def start_pipeline(project_id: int, workflow: str, profile_id: int | None = None
     jobs_by_stage: dict[str, Job] = {}
 
     for stage in stages:
-        if stage == "translate" and not config.get("translation_language"):
+        if stage == "translate" and not config.get("translate_to"):
             _mark_skipped(run, stage, "Tradução não solicitada")
             continue
 

@@ -108,7 +108,7 @@ class Project(models.Model):
 
     def recompute_status(self) -> str:
         """Rolls up child state into a Project-level status (§4.1)."""
-        if not self.input_assets.filter(kind=AssetKind.NORMALIZED).exists():
+        if not self.assets.filter(kind=AssetKind.NORMALIZED).exists():
             self.status = ProjectStatus.EMPTY
         elif not hasattr(self, "transcription"):
             self.status = ProjectStatus.INGESTED

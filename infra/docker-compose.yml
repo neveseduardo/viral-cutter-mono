@@ -85,7 +85,7 @@ services:
   worker:
     build:
       context: ..
-      dockerfile: infra/backend/Dockerfile
+      dockerfile: infra/worker/Dockerfile
     restart: unless-stopped
     command: celery -A config worker --loglevel=info --concurrency=2 -Q io,cpu
     env_file: ../backend/.env
@@ -103,7 +103,7 @@ services:
   worker-gpu:
     build:
       context: ..
-      dockerfile: infra/backend/Dockerfile
+      dockerfile: infra/worker/Dockerfile
     profiles: ["gpu"]
     restart: unless-stopped
     command: celery -A config worker --loglevel=info --concurrency=1 -Q gpu --prefetch-multiplier=1

@@ -10,7 +10,7 @@ export const LOCALES = [
 
 export const i18n = createI18n({
   legacy: false,
-  locale: localStorage.getItem("vc:locale") ?? navigator.language.startsWith("pt") ? "pt-BR" : "en",
+  locale: localStorage.getItem("vc:locale") ?? (navigator.language.startsWith("pt") ? "pt-BR" : "en"),
   fallbackLocale: "en",
   messages: {
     "pt-BR": ptBR,

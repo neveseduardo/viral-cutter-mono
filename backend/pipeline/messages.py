@@ -34,4 +34,5 @@ MESSAGES = {
     "job.render.started": "Renderizando vídeo final...",
     "job.render.progress": "Renderizando segmento {seg} de {total}",
     "job.render.done": "Renderização concluída.",
+    "job.render.failed": "Falha ao renderizar os vídeos.",
 }

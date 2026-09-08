@@ -13,7 +13,12 @@ from rest_framework.test import APITestCase
 from apps.projects.models import PipelineRun, Project, VideoAsset
 
 MODELS_TO_OVERRIDE = {
+    # Dispatch tasks to memory broker (no Redis needed). Tasks are NOT eagerly
+    # executed so tests only verify HTTP contracts + DB state, not task logic.
     "CELERY_TASK_ALWAYS_EAGER": False,
+    "CELERY_RESULT_BACKEND": "cache+memory://",
+    "CELERY_BROKER_URL": "memory://",
+    "CELERY_BROKER_TRANSPORT_OPTIONS": {},
     "AUTH_DISABLED": True,
 }
 
@@ -82,13 +87,21 @@ class IngestApiTest(APITestCase):
 
 @override_settings(**MODELS_TO_OVERRIDE)
 class PipelineRunApiTest(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Ensure all tasks are registered so eager dispatch resolves them by name.
+        from config.celery import app as celery_app
+        celery_app.loader.import_default_modules()
+        celery_app.autodiscover_tasks()
+
     def setUp(self):
         self.proj = Project.objects.create(name="pipe")
 
     def test_create_pipeline_run(self):
         resp = self.client.post(
             f"/api/v1/projects/{self.proj.id}/pipeline-runs",
-            {"workflow": "full", "overrides": {"translation_language": None}},
+            {"workflow": "full", "overrides": {"translate_to": None}},
             format="json",
         )
         self.assertEqual(resp.status_code, 201)

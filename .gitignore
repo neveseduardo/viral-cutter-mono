@@ -3,10 +3,13 @@
 __pycache__/
 *.py[cod]
 staticfiles/
-media/
+# storage de mídia (runtime) — ignora apenas na raiz e em data/
+/media/
 data/
 backend/.env
 backend/**/.env
+# Exceção: apps/media é um módulo Python, não storage
+!backend/apps/media/
 
 # Python
 .venv/
@@ -35,3 +38,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Generated/runtime files that should not be versioned
+backend/db.sqlite3
+frontend/tsconfig.tsbuildinfo

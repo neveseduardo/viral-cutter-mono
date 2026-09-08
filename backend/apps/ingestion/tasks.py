@@ -93,14 +93,16 @@ def download_youtube(project: Project, url: str, video_quality: str, use_youtube
     dest = abs_path(key)
     dest.parent.mkdir(parents=True, exist_ok=True)
 
+    # Prefer H.264/MP4 to avoid huge VP9/AV1 streams that bloat storage and
+    # slow transcription. Fallback chain: h264 mp4 → any mp4 → best available.
     format_map = {
-        "best": "bestvideo*+bestaudio/best",
-        "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-        "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+        "best": "bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best",
+        "1080p": "bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio/best[height<=1080]",
+        "720p": "bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio/best[height<=720]",
+        "480p": "bestvideo[height<=480][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=480][ext=mp4]+bestaudio/best[height<=480]",
     }
     ydl_opts = {
-        "format": format_map.get(video_quality, format_map["best"]),
+        "format": format_map.get(video_quality, format_map["720p"]),
         "outtmpl": str(dest),
         "merge_output_format": "mp4",
         "noplaylist": True,

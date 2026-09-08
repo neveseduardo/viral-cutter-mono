@@ -38,7 +38,8 @@ async function downloadFinal() {
 </script>
 
 <template>
-  <Card class="flex flex-col overflow-hidden">
+  <router-link :to="`/projects/${props.project.id}`" class="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">
+  <Card class="flex flex-col overflow-hidden transition-colors hover:border-muted-foreground/40 cursor-pointer">
     <div class="flex aspect-video w-full items-center justify-center bg-muted">
       <img
         v-if="props.project.thumbnail"
@@ -103,4 +104,5 @@ async function downloadFinal() {
       <span>{{ new Date(props.project.updated_at).toLocaleString() }}</span>
     </CardFooter>
   </Card>
+  </router-link>
 </template>

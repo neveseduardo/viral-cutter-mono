@@ -5,6 +5,8 @@ creation, per-stage queue assignment, fingerprint-based skipping, and the
 partial-status aggregation logic.
 """
 
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 
 from apps.projects.models import (
@@ -19,14 +21,50 @@ from apps.projects.pipeline import build_stages, resolve_config, start_pipeline
 from pipeline.fingerprints import asset_fingerprint
 from pipeline.progress import mark_job, refresh_run_status
 
+# Patch that prevents the Celery chain from actually dispatching tasks.
+# Tests only verify that the Run + Jobs are created with the correct structure.
+_PATCH_CHAIN = patch("apps.projects.pipeline.chain")
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False,
+                   CELERY_RESULT_BACKEND="cache+memory://",
+                   CELERY_BROKER_URL="memory://")
 class QueuePlanTest(TestCase):
     """Stages map to queue by task nature — but the plan carries the intent.
-    Queue names come from routing (io/cpu/gpu). We check plan structure & jobs."""
+    Queue names come from routing (io/cpu/gpu). We check plan structure & jobs.
+
+    The Celery chain is patched so tasks are never dispatched; tests only
+    inspect the PipelineRun + Job DB state produced by start_pipeline().
+    """
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True,
+                   CELERY_TASK_EAGER_PROPAGATES=False,
+                   CELERY_RESULT_BACKEND="cache+memory://")
+class QueuePlanTest(TestCase):
+    """Stages map to queue by task nature — but the plan carries the intent.
+    Queue names come from routing (io/cpu/gpu). We check plan structure & jobs.
+
+    ALWAYS_EAGER=True: tasks execute inline so no broker is needed.
+    EAGER_PROPAGATES=False: task failures don't raise in the test (we only check
+    DB state — jobs created + queues assigned — not execution outcomes).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Register all tasks so eager dispatch can resolve them by name.
+        from config.celery import app as celery_app
+        celery_app.loader.import_default_modules()
+        celery_app.autodiscover_tasks()
 
     def setUp(self):
         self.proj = Project.objects.create(name="qplan")
+
+    def _run(self, workflow, overrides=None):
+        with _PATCH_CHAIN:
+            run = start_pipeline(self.proj.id, workflow, overrides=overrides or {})
+        return PipelineRun.objects.get(id=run.id)
 
     def _run(self, workflow, overrides=None):
         run = start_pipeline(self.proj.id, workflow, overrides=overrides or {})
@@ -66,8 +104,18 @@ class QueuePlanTest(TestCase):
         self.assertIn(encode_queue(), ("gpu", "cpu"))
 
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True,
+                   CELERY_TASK_EAGER_PROPAGATES=False,
+                   CELERY_RESULT_BACKEND="cache+memory://")
 class FingerprintSkipTest(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from config.celery import app as celery_app
+        celery_app.loader.import_default_modules()
+        celery_app.autodiscover_tasks()
+
     def setUp(self):
         self.proj = Project.objects.create(name="fp-skip")
         self.asset = VideoAsset.objects.create(
@@ -90,7 +138,9 @@ class FingerprintSkipTest(TestCase):
         self.assertNotEqual(tr_job.status, "skipped")
 
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True,
+                   CELERY_RESULT_BACKEND="cache+memory://",
+                   CELERY_BROKER_URL="memory://")
 class PartialSuccessTest(TestCase):
     def setUp(self):
         self.proj = Project.objects.create(name="partial")
@@ -122,7 +172,9 @@ class PartialSuccessTest(TestCase):
         self.assertEqual(self.run.status, RunStatus.SUCCEEDED)
 
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True,
+                   CELERY_RESULT_BACKEND="cache+memory://",
+                   CELERY_BROKER_URL="memory://")
 class ComponentPlanTest(TestCase):
     def test_build_stages_known_stages(self):
         stages = build_stages("full")
